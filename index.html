@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>记忆报刊亭 | Memory Kiosk</title>
+    <meta name="description" content="领取你的记忆种子 - 治愈系3D体验">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: linear-gradient(180deg, #a1c4fd 0%, #c2e9fb 100%);
+            font-family: 'Noto Sans SC', sans-serif; 
+        }
+        
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* UI Layer */
+        #ui-layer { position: absolute; z-index: 10; pointer-events: none; width: 100%; height: 100%; }
+        
+        .interactive-btn { 
+            pointer-events: auto; 
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); 
+        }
+        .interactive-btn:active { transform: scale(0.9); }
+        .interactive-btn:hover { transform: translateY(-2px); }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+        }
+
+        .title-font { font-family: 'ZCOOL KuaiLe', cursive; }
+
+        /* Paper Texture Overlay for Map */
+        .paper-texture {
+            background-color: #fffdf0;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%239C92AC' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+        }
+
+        @keyframes float-gentle {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-float { animation: float-gentle 3s ease-in-out infinite; }
+
+        .gemini-sparkle {
+            animation: sparkle 2s infinite;
+        }
+        @keyframes sparkle {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer" class="flex flex-col justify-between p-6">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-start">
+            <div class="glass-panel px-6 py-3 rounded-2xl pointer-events-auto flex items-center space-x-3">
+                <div class="w-8 h-8 bg-yellow-300 rounded-full flex items-center justify-center shadow-sm">
+                    <i class="fas fa-sun text-orange-500"></i>
+                </div>
+                <div>
+                    <!-- Updated Title -->
+                    <h1 class="text-gray-700 text-xl title-font tracking-wide">记忆报刊亭</h1>
+                    <p class="text-gray-500 text-xs font-medium">今日天气：晴转多云</p>
+                </div>
+            </div>
+            
+            <button onclick="toggleMap()" class="interactive-btn glass-panel hover:bg-white text-gray-600 rounded-full w-14 h-14 flex items-center justify-center shadow-lg group">
+                <i class="fas fa-map-marked-alt text-2xl text-blue-400 group-hover:text-blue-500 transition-colors"></i>
+            </button>
+        </div>
+
+        <!-- Controls -->
+        <div class="w-full flex flex-col items-center mb-8 pointer-events-auto space-y-4">
+            <div class="w-full max-w-md relative group">
+                <input type="text" id="mood-input" placeholder="写下你此刻的心情..." class="w-full glass-panel px-6 py-3 rounded-full outline-none text-gray-600 placeholder-gray-400 focus:bg-white/80 transition-all pr-10 shadow-sm border border-transparent focus:border-blue-200">
+                <i class="fas fa-pen absolute right-5 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+
+            <button id="generate-btn" onclick="generateNewspaper()" class="interactive-btn px-10 py-4 bg-white rounded-full shadow-[0_10px_25px_rgba(147,197,253,0.5)] border-2 border-blue-100 flex items-center space-x-3 hover:shadow-[0_15px_30px_rgba(147,197,253,0.7)]">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center text-purple-500 relative">
+                    <i class="fas fa-magic text-lg gemini-sparkle absolute"></i>
+                </div>
+                <span class="text-gray-700 font-bold text-lg title-font">生成今日记忆</span>
+            </button>
+        </div>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel px-8 py-6 rounded-3xl opacity-0 pointer-events-none transition-all duration-500 text-center shadow-xl scale-90 flex flex-col items-center">
+            <div id="toast-icon" class="w-12 h-12 bg-blue-100 text-blue-500 rounded-full flex items-center justify-center mb-3 animate-spin-slow">
+                <i class="fas fa-snowflake"></i>
+            </div>
+            <div id="toast-title" class="text-gray-700 text-xl font-bold mb-1 title-font">正在连接...</div>
+            <div id="toast-msg" class="text-gray-400 text-sm">Gemini 正在为你编织记忆</div>
+        </div>
+    </div>
+
+    <!-- Map Modal -->
+    <div id="map-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-blue-900/20 hidden backdrop-blur-sm transition-opacity duration-300" onclick="if(event.target === this) toggleMap()">
+        <div class="paper-texture w-11/12 max-w-lg h-3/4 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden relative transform transition-all scale-95 opacity-0 rotate-1" id="map-content">
+            
+            <!-- Map Header -->
+            <div class="p-6 border-b border-yellow-900/5 flex justify-between items-center bg-white/50">
+                <h2 class="text-gray-700 title-font text-2xl flex items-center"><i class="fas fa-compass text-orange-400 mr-3"></i> 城市漫步指南</h2>
+                <button onclick="toggleMap()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Map Content -->
+            <div class="relative flex-1 overflow-hidden">
+                <div class="absolute top-10 left-10 w-20 h-20 bg-green-100 rounded-full opacity-50 mix-blend-multiply"></div>
+                <div class="absolute bottom-20 right-10 w-32 h-32 bg-blue-100 rounded-full opacity-50 mix-blend-multiply"></div>
+                <div class="absolute top-1/2 left-1/2 w-40 h-40 bg-yellow-50 rounded-full opacity-60 mix-blend-multiply transform -translate-x-1/2 -translate-y-1/2"></div>
+
+                <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-30" style="stroke-dasharray: 5,5;">
+                    <path d="M 50 100 Q 150 200 250 150 T 350 300" stroke="#aaa" stroke-width="2" fill="none"/>
+                    <path d="M 250 150 Q 100 300 100 450" stroke="#aaa" stroke-width="2" fill="none"/>
+                </svg>
+                
+                <div class="absolute top-1/3 left-1/4 group cursor-pointer animate-float" style="animation-delay: 0s;">
+                    <div class="flex flex-col items-center">
+                        <div class="w-10 h-10 bg-white border-2 border-green-400 rounded-full flex items-center justify-center shadow-md z-10 relative">
+                            <i class="fas fa-tree text-green-500"></i>
+                        </div>
+                        <div class="bg-white px-3 py-1 rounded-lg shadow-sm mt-2 text-xs text-gray-600 font-bold border border-gray-100 transform group-hover:scale-110 transition-transform">公园角落</div>
+                    </div>
+                </div>
+                
+                <div class="absolute bottom-1/4 right-1/3 group cursor-pointer animate-float" style="animation-delay: 1s;">
+                    <div class="flex flex-col items-center">
+                        <div class="w-10 h-10 bg-white border-2 border-orange-400 rounded-full flex items-center justify-center shadow-md z-10 relative">
+                            <i class="fas fa-coffee text-orange-500"></i>
+                        </div>
+                        <div class="bg-white px-3 py-1 rounded-lg shadow-sm mt-2 text-xs text-gray-600 font-bold border border-gray-100 transform group-hover:scale-110 transition-transform">老街咖啡</div>
+                    </div>
+                </div>
+
+                <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
+                    <div class="relative flex flex-col items-center">
+                        <div class="w-4 h-4 bg-blue-400 rounded-full animate-ping absolute top-4 opacity-50"></div>
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center shadow-lg text-white z-10 border-4 border-white">
+                            <i class="fas fa-home"></i>
+                        </div>
+                        <div class="bg-blue-50 px-4 py-2 rounded-xl shadow-md mt-3 text-sm text-blue-800 font-bold border border-blue-100">
+                            此处
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <div class="p-4 bg-white/80 text-xs text-gray-400 flex justify-center items-center space-x-2">
+                <i class="fas fa-walking"></i>
+                <span>距离下一个记忆点还有 800 米</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three.js Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.7.1/gsap.min.js"></script>
+
+    <script>
+        const apiKey = ""; 
+
+        // --- 1. Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0xc2e9fb, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(4, 2.5, 6);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.02; 
+        controls.minDistance = 3;
+        controls.maxDistance = 12;
+
+        // --- 2. Lighting ---
+        const ambientLight = new THREE.HemisphereLight(0xffffff, 0xffecd2, 0.8); 
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(5, 10, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.bias = -0.0001;
+        scene.add(sunLight);
+
+        const fillLight = new THREE.PointLight(0xe6f7ff, 0.5);
+        fillLight.position.set(-5, 2, -5);
+        scene.add(fillLight);
+
+        // --- 3. Textures ---
+        
+        function createTextTexture(text, color, bgColor, width, height, fontSize = "40px") {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = bgColor;
+            roundRect(ctx, 0, 0, width, height, 20);
+            ctx.fill();
+            
+            ctx.font = `bold ${fontSize} "ZCOOL KuaiLe", sans-serif`;
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, width / 2, height / 2 + 5);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x+r, y);
+            ctx.arcTo(x+w, y,   x+w, y+h, r);
+            ctx.arcTo(x+w, y+h, x,   y+h, r);
+            ctx.arcTo(x,   y+h, x,   y,   r);
+            ctx.arcTo(x,   y,   x+w, y,   r);
+            ctx.closePath();
+        }
+
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            const chars = text.split('');
+            let line = '';
+            let currentY = y;
+
+            for(let n = 0; n < chars.length; n++) {
+                const testLine = line + chars[n];
+                const metrics = context.measureText(testLine);
+                const testWidth = metrics.width;
+                if (testWidth > maxWidth && n > 0) {
+                    context.fillText(line, x, currentY);
+                    line = chars[n];
+                    currentY += lineHeight;
+                }
+                else {
+                    line = testLine;
+                }
+            }
+            context.fillText(line, x, currentY);
+        }
+
+        function createNewspaperTexture(textContent) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#fdfbf7';
+            ctx.fillRect(0, 0, 512, 512);
+            
+            for (let i = 0; i < 5000; i++) {
+                ctx.fillStyle = `rgba(200, 180, 150, ${Math.random() * 0.2})`;
+                ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+            }
+
+            ctx.fillStyle = '#dbeafe';
+            ctx.fillRect(20, 20, 472, 80);
+            
+            // Updated Newspaper Header
+            ctx.fillStyle = '#3b82f6';
+            ctx.font = 'bold 40px "ZCOOL KuaiLe", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("记忆日报", 256, 75); // Changed from 时光日报
+
+            ctx.fillStyle = '#dcfce7';
+            ctx.fillRect(20, 120, 472, 200);
+            
+            ctx.fillStyle = '#fcd34d';
+            ctx.beginPath();
+            ctx.arc(256, 220, 50, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#fcd34d';
+            ctx.lineWidth = 5;
+            for(let i=0; i<8; i++) {
+                ctx.beginPath();
+                const angle = (i / 8) * Math.PI * 2;
+                ctx.moveTo(256 + Math.cos(angle)*60, 220 + Math.sin(angle)*60);
+                ctx.lineTo(256 + Math.cos(angle)*80, 220 + Math.sin(angle)*80);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#4b5563';
+            ctx.textAlign = 'center';
+            
+            if (textContent) {
+                ctx.font = '26px "Noto Sans SC", sans-serif';
+                ctx.fillStyle = '#374151';
+                wrapText(ctx, textContent, 256, 360, 400, 36);
+            } else {
+                ctx.font = 'bold 48px "ZCOOL KuaiLe", sans-serif';
+                ctx.fillText("领取你的", 256, 380);
+                ctx.fillStyle = '#f59e0b';
+                ctx.fillText("记忆种子", 256, 440);
+            }
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- 4. Materials ---
+        const mainColor = 0xfff8e7; 
+        const secondaryColor = 0x81c7d4; 
+        const woodColor = 0xd4a373; 
+
+        const paintMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.6, metalness: 0.1 });
+        const accentMat = new THREE.MeshStandardMaterial({ color: secondaryColor, roughness: 0.5, metalness: 0.1 });
+        const woodMat = new THREE.MeshStandardMaterial({ color: woodColor, roughness: 0.9 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 }); 
+        const glassMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0xffffff, 
+            metalness: 0, 
+            roughness: 0.2, 
+            transmission: 0.9, 
+            transparent: true 
+        });
+
+        // Updated Sign Texture to match "Memory Kiosk"
+        const signTexture = createTextTexture("记 忆 报 刊 亭", "#ffffff", "#fdba74", 512, 128, "60px");
+        const signMat = new THREE.MeshBasicMaterial({ map: signTexture, transparent: true });
+
+        const screenCanvas = document.createElement('canvas');
+        screenCanvas.width = 256;
+        screenCanvas.height = 256;
+        const screenCtx = screenCanvas.getContext('2d');
+        const screenTexture = new THREE.CanvasTexture(screenCanvas);
+        const screenMat = new THREE.MeshBasicMaterial({ map: screenTexture });
+
+        // --- 5. Build The Kiosk ---
+        const kioskGroup = new THREE.Group();
+        scene.add(kioskGroup);
+
+        const bodyGeo = new THREE.BoxGeometry(2, 3.5, 1.5);
+        const body = new THREE.Mesh(bodyGeo, paintMat);
+        body.position.y = 1.75;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        kioskGroup.add(body);
+
+        const roofGeo = new THREE.ConeGeometry(1.6, 0.8, 4);
+        const roof = new THREE.Mesh(roofGeo, accentMat);
+        roof.position.y = 3.9;
+        roof.rotation.y = Math.PI / 4;
+        kioskGroup.add(roof);
+        
+        const roofBase = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 1.7), accentMat);
+        roofBase.position.y = 3.55;
+        kioskGroup.add(roofBase);
+
+        const signPlateGeo = new THREE.PlaneGeometry(1.6, 0.4);
+        const signPlate = new THREE.Mesh(signPlateGeo, signMat);
+        signPlate.position.set(0, 3.2, 0.76); 
+        kioskGroup.add(signPlate);
+
+        const recessGeo = new THREE.BoxGeometry(1.6, 1.6, 0.1);
+        const recess = new THREE.Mesh(recessGeo, new THREE.MeshStandardMaterial({color: 0xffffff}));
+        recess.position.set(0, 2.1, 0.72);
+        kioskGroup.add(recess);
+
+        const screenMeshGeo = new THREE.PlaneGeometry(1.4, 1.4);
+        const screenMesh = new THREE.Mesh(screenMeshGeo, screenMat);
+        screenMesh.position.set(0, 2.1, 0.78);
+        kioskGroup.add(screenMesh);
+
+        const rackGroup = new THREE.Group();
+        rackGroup.position.set(-1.1, 2, 0.4);
+        kioskGroup.add(rackGroup);
+
+        for(let i=0; i<3; i++) {
+            const rackShelf = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.8), woodMat);
+            rackShelf.position.y = i * 0.5 - 0.5;
+            rackShelf.rotation.z = 0.2;
+            rackGroup.add(rackShelf);
+            
+            const magColor = new THREE.Color().setHSL(i * 0.3, 0.7, 0.8); 
+            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.6), new THREE.MeshStandardMaterial({color: magColor}));
+            mag.position.y = i * 0.5 - 0.45;
+            mag.rotation.z = 0.2;
+            rackGroup.add(mag);
+        }
+
+        const slotGeo = new THREE.BoxGeometry(0.8, 0.15, 0.1);
+        const slotMesh = new THREE.Mesh(slotGeo, darkMat);
+        slotMesh.position.set(0, 0.8, 0.76);
+        kioskGroup.add(slotMesh);
+
+        const shadowGeo = new THREE.CircleGeometry(2.5, 32);
+        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x88aacc, opacity: 0.2, transparent: true });
+        const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.y = 0.02;
+        scene.add(shadow);
+        
+        const potGeo = new THREE.CylinderGeometry(0.2, 0.15, 0.3, 16);
+        const pot = new THREE.Mesh(potGeo, new THREE.MeshStandardMaterial({color: 0xd97706})); 
+        pot.position.set(1.4, 0.15, 0.8);
+        kioskGroup.add(pot);
+        
+        const plantGeo = new THREE.DodecahedronGeometry(0.25);
+        const plant = new THREE.Mesh(plantGeo, new THREE.MeshStandardMaterial({color: 0x4ade80})); 
+        plant.position.set(1.4, 0.4, 0.8);
+        kioskGroup.add(plant);
+
+        // --- 6. Gemini & Interactive Newspaper Logic ---
+        
+        let newspaper = null;
+
+        async function callGemini(mood) {
+            const prompt = mood 
+                ? `用户此刻的心情是：${mood}。请你是治愈报刊亭的精灵，写一句简短、温暖、治愈的现代诗或语录给TA，不超过25个字，不要用引号。` 
+                : `请你是治愈报刊亭的精灵，写一句关于未来或美好回忆的治愈短句，温暖人心，不超过25个字，不要用引号。`;
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (error) {
+                console.error("Gemini Error:", error);
+                return mood ? "心情会像天气一样放晴的。" : "每一天都是新的开始。"; // Fallback
+            }
+        }
+
+        async function generateNewspaper() {
+            const btn = document.getElementById('generate-btn');
+            const moodInput = document.getElementById('mood-input');
+            const toast = document.getElementById('toast');
+            const toastTitle = document.getElementById('toast-title');
+            const toastMsg = document.getElementById('toast-msg');
+            const toastIcon = document.getElementById('toast-icon');
+            
+            if(btn.disabled) return;
+            btn.disabled = true;
+            
+            toast.style.opacity = 1;
+            toast.style.transform = "translate(-50%, -50%) scale(1)";
+            toastTitle.innerText = "正在联通云端...";
+            toastMsg.innerText = "Gemini 正在为你编织记忆";
+            toastIcon.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            const mood = moodInput.value.trim();
+            const geminiText = await callGemini(mood);
+            
+            toastTitle.innerText = "记忆已生成";
+            toastMsg.innerText = "正在打印...";
+            toastIcon.innerHTML = '<i class="fas fa-check"></i>';
+
+            const newTexture = createNewspaperTexture(geminiText);
+
+            if(newspaper) {
+                scene.remove(newspaper);
+                newspaper.geometry.dispose();
+                newspaper = null;
+            }
+
+            const paperGeo = new THREE.PlaneGeometry(0.6, 0.8);
+            const paperMat = new THREE.MeshBasicMaterial({ map: newTexture, side: THREE.DoubleSide });
+            newspaper = new THREE.Mesh(paperGeo, paperMat);
+            
+            newspaper.position.set(0, 0.8, 0.75); 
+            newspaper.scale.set(0.1, 0.1, 0.1);
+            newspaper.rotation.x = 0; 
+            scene.add(newspaper);
+
+            const tl = gsap.timeline({
+                onComplete: () => {
+                    btn.disabled = false;
+                    moodInput.value = ""; 
+                    setTimeout(() => { 
+                        toast.style.opacity = 0; 
+                        toast.style.transform = "translate(-50%, -50%) scale(0.9)";
+                    }, 2500);
+                }
+            });
+
+            tl.to(newspaper.position, { z: 1.1, duration: 0.8, ease: "back.out(1.7)" })
+              .to(newspaper.scale, { x: 1, y: 1, z: 1, duration: 0.6 }, "<")
+              .to(newspaper.position, { y: 1.3, duration: 1.5, ease: "power1.inOut" })
+              .to(newspaper.rotation, { x: -0.4, z: 0.05, duration: 1.5 }, "<");
+        }
+
+        // --- 7. Map UI Logic ---
+        function toggleMap() {
+            const modal = document.getElementById('map-modal');
+            const content = document.getElementById('map-content');
+            
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    content.classList.remove('scale-95', 'opacity-0', 'rotate-1');
+                    content.classList.add('scale-100', 'opacity-100', 'rotate-0');
+                }, 10);
+            } else {
+                content.classList.remove('scale-100', 'opacity-100', 'rotate-0');
+                content.classList.add('scale-95', 'opacity-0', 'rotate-1');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 300);
+            }
+        }
+
+        // --- 8. Animation Loop ---
+        
+        let cloudOffset = 0;
+        
+        function updateScreen() {
+            const w = screenCanvas.width;
+            const h = screenCanvas.height;
+            
+            const grd = screenCtx.createLinearGradient(0, 0, 0, h);
+            grd.addColorStop(0, "#60a5fa"); 
+            grd.addColorStop(1, "#eff6ff"); 
+            screenCtx.fillStyle = grd;
+            screenCtx.fillRect(0, 0, w, h);
+            
+            cloudOffset += 0.2;
+            screenCtx.fillStyle = "rgba(255, 255, 255, 0.8)";
+            
+            function drawCloud(x, y, size) {
+                screenCtx.beginPath();
+                screenCtx.arc(x, y, size, 0, Math.PI * 2);
+                screenCtx.arc(x + size*0.8, y - size*0.5, size*0.9, 0, Math.PI * 2);
+                screenCtx.arc(x + size*1.6, y, size, 0, Math.PI * 2);
+                screenCtx.fill();
+            }
+            
+            const cx1 = (cloudOffset) % (w + 100) - 50;
+            const cx2 = (cloudOffset * 0.5 + 100) % (w + 100) - 50;
+            
+            drawCloud(cx1, h/2, 30);
+            drawCloud(cx2, h/3, 20);
+            
+            screenTexture.needsUpdate = true;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateScreen();
+            
+            kioskGroup.position.y = Math.sin(Date.now() * 0.001) * 0.03;
+            kioskGroup.rotation.y = Math.sin(Date.now() * 0.0005) * 0.02;
+            
+            if(newspaper && newspaper.position.y > 1.0) {
+                newspaper.position.y = 1.3 + Math.sin(Date.now() * 0.002) * 0.05;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>

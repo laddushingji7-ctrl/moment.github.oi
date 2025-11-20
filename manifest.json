@@ -1,0 +1,22 @@
+{
+  "name": "记忆报刊亭",
+  "short_name": "记忆亭",
+  "description": "领取你的记忆种子 - 交互式3D体验",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#050b14",
+  "theme_color": "#06b6d4",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/svgs/solid/newspaper.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/svgs/solid/newspaper.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
